@@ -7,7 +7,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.*;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/ai")
 public class AiController {
 
     private final RestTemplate restTemplate;
@@ -19,7 +19,7 @@ public class AiController {
         this.restTemplate = restTemplate;
     }
 
-    @PostMapping(value = "/process", produces = "application/json; charset=UTF-8")
+    @PostMapping(value = "/summaries", produces = "application/json; charset=UTF-8")
     public Map<String, Object> summarize(@RequestBody Map<String, Object> inputJson) {
         String url = "https://openrouter.ai/api/v1/chat/completions";
 
