@@ -10,9 +10,37 @@ import java.util.*;
 @RequestMapping("/api/ai")
 public class AiController {
 
+    @Value("${steam.service.url}")
+    private String steamServiceUrl;
+
+    @GetMapping("/summaries/{id}")
+    public Map<String, Object> summarizeById(@PathVariable("id") String id) {
+        try {
+            // 1. Формируем URL для получения данных от Steam-сервиса
+            String fetchUrl = steamServiceUrl + id;
+
+            // 2. Делаем запрос к сервису-хранилищу данных
+            // Мы ожидаем получить Map (JSON), который потом скормим нейросети
+            ResponseEntity<Map> steamDataResponse = restTemplate.getForEntity(fetchUrl, Map.class);
+
+            if (steamDataResponse.getStatusCode() != HttpStatus.OK || steamDataResponse.getBody() == null) {
+                return Map.of("error", "Не удалось получить данные игрока с ID: " + id);
+            }
+
+            Map<String, Object> steamJson = (Map<String, Object>) steamDataResponse.getBody();
+
+            // 3. Вызываем метод анализа
+            return summarize(steamJson);
+
+        } catch (Exception e) {
+            return Map.of("error", "Ошибка при получении данных: " + e.getMessage());
+        }
+    }
+
+
     private final RestTemplate restTemplate;
 
-    @Value("${ai.api.key}") // Ключ подтянется из настроек
+    @Value("${ai.api.key}")
     private String apiKey;
 
     public AiController(RestTemplate restTemplate) {
