@@ -22,6 +22,9 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withResourceNotFound;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+
 @SpringBootTest(properties = {
         "steam.service.url=http://localhost:8081/stats/",
         "ai.api.key=test-token-123"
@@ -82,4 +85,40 @@ class AiControllerTest {
 
         mockServer.verify();
     }
+
+    @Test
+    @DisplayName("Ошибка: Профиль Steam не найден (404)")
+    void testSteamProfileNotFound() throws Exception {
+        String steamId = "wrong_id";
+
+        // Имитируем, что Steam вернул 404 Not Found
+        mockServer.expect(requestTo("http://localhost:8081/stats/" + steamId))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withResourceNotFound()); // Специальный метод для 404
+
+        mockMvc.perform(get("/api/ai/summaries/" + steamId))
+                .andDo(print())
+                .andExpect(status().isNotFound()); // Проверяем, что наш API тоже ответил 404
+    }
+
+    @Test
+    @DisplayName("Ошибка: OpenRouter вернул 500 Internal Server Error")
+    void testAiServiceError() throws Exception {
+        String steamId = "76561198000000000";
+        String mockSteamResponse = "{\"nickname\": \"Gamer123\", \"hours\": 100}";
+
+        // Steam ответил нормально
+        mockServer.expect(requestTo("http://localhost:8081/stats/" + steamId))
+                .andRespond(withSuccess(mockSteamResponse, MediaType.APPLICATION_JSON));
+
+
+        mockServer.expect(requestTo("https://openrouter.ai/api/v1/chat/completions"))
+                .andRespond(withServerError()); // Имитируем 500 ошибку
+
+        mockMvc.perform(get("/api/ai/summaries/" + steamId))
+                .andDo(print())
+                .andExpect(status().isInternalServerError()); // Проверяем, что мы вернули 500
+    }
+
+
 }
