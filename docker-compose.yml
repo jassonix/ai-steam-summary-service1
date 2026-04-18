@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  ai-summary-service:
+    build: .
+    container_name: ai-service-container
+    ports:
+      - "8081:8081"
+    environment:
+      - AI_API_KEY=${AI_API_KEY}
+    restart: always
+
+#docker-compose up -d --build
