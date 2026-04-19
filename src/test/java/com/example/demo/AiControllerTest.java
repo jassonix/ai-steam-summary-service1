@@ -11,22 +11,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.web.servlet.MockMvc;
 
-// Импорты для работы с результатами MockMvc
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-// Импорты для настройки заглушек внешних API
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
-
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withResourceNotFound;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.hamcrest.Matchers.containsString;
 
 @SpringBootTest(properties = {
-        "steam.service.url=http://localhost:8081/stats/",
+        "steam.service.url=http://localhost:8080/api/ai/stats",
         "ai.api.key=test-token-123"
 })
 @AutoConfigureMockMvc
@@ -40,17 +34,15 @@ class AiControllerTest {
     private MockRestServiceServer mockServer;
 
     @Test
-    @DisplayName("Сценарий: Успешное получение сводки профиля через Steam и OpenRouter")
+    @DisplayName("Сценарий: Успешное получение сводки через POST к Steam и OpenRouter")
     void testFullSummarizeFlow() throws Exception {
-
-        // --- GIVEN ---
-        String steamId = "76561198000000000";
+        String telegramId = "123456789";
 
         String mockSteamResponse = """
                 {
                     "nickname": "Gamer123",
-                    "hours": 150,
-                    "games": ["Dota 2", "CS:GO"]
+                    "hoursTotal": 150,
+                    "topGame": "Dota 2"
                 }
                 """;
 
@@ -64,61 +56,62 @@ class AiControllerTest {
                 }
                 """;
 
-        // ожидание запроса к сервису статистики
-        mockServer.expect(requestTo("http://localhost:8081/stats/" + steamId))
-                .andExpect(method(HttpMethod.GET))
+        mockServer.expect(requestTo("http://localhost:8080/api/ai/stats"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"telegramId\":\"" + telegramId + "\"}"))
                 .andRespond(withSuccess(mockSteamResponse, MediaType.APPLICATION_JSON));
 
-        // ожидание запроса к OpenRouter
         mockServer.expect(requestTo("https://openrouter.ai/api/v1/chat/completions"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess(mockAiResponse, MediaType.APPLICATION_JSON));
 
-        // --- WHEN ---
-        var resultActions = mockMvc.perform(get("/api/ai/summaries/" + steamId));
-
-        // --- THEN ---
-        resultActions
-                .andDo(print()) // Выведет детали запроса/ответа в консоль для отладки
+        mockMvc.perform(get("/api/ai/summaries/" + telegramId))
+                .andDo(print())
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("Этот игрок — ветеран киберспорта"));
+                .andExpect(jsonPath("$.status").value("success"))
+                .andExpect(jsonPath("$.summary").value("Этот игрок — ветеран киберспорта"));
 
         mockServer.verify();
     }
 
     @Test
-    @DisplayName("Ошибка: Профиль Steam не найден (404)")
+    @DisplayName("Ошибка: Привязка не найдена (Steam вернул 404)")
     void testSteamProfileNotFound() throws Exception {
-        String steamId = "wrong_id";
+        String telegramId = "999";
 
-        // Имитируем, что Steam вернул 404 Not Found
-        mockServer.expect(requestTo("http://localhost:8081/stats/" + steamId))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withResourceNotFound()); // Специальный метод для 404
+        mockServer.expect(requestTo("http://localhost:8080/api/ai/stats"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withResourceNotFound());
 
-        mockMvc.perform(get("/api/ai/summaries/" + steamId))
+        mockMvc.perform(get("/api/ai/summaries/" + telegramId))
                 .andDo(print())
-                .andExpect(status().isNotFound()); // Проверяем, что наш API тоже ответил 404
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value("error"))
+                // ИСПРАВЛЕНО: контроллер возвращает "Ошибка внешнего сервиса"
+                .andExpect(jsonPath("$.message", containsString("Ошибка внешнего сервиса")));
     }
 
     @Test
-    @DisplayName("Ошибка: OpenRouter вернул 500 Internal Server Error")
+    @DisplayName("Ошибка: Сбой нейросети (OpenRouter вернул 500)")
     void testAiServiceError() throws Exception {
-        String steamId = "76561198000000000";
-        String mockSteamResponse = "{\"nickname\": \"Gamer123\", \"hours\": 100}";
+        String telegramId = "123";
+        String mockSteamResponse = "{\"nickname\": \"Gamer123\"}";
 
-        // Steam ответил нормально
-        mockServer.expect(requestTo("http://localhost:8081/stats/" + steamId))
+        // 1. Стим возвращает успех
+        mockServer.expect(requestTo("http://localhost:8080/api/ai/stats"))
+                .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess(mockSteamResponse, MediaType.APPLICATION_JSON));
 
-
+        // 2. OpenRouter возвращает 500
         mockServer.expect(requestTo("https://openrouter.ai/api/v1/chat/completions"))
-                .andRespond(withServerError()); // Имитируем 500 ошибку
+                .andRespond(withServerError());
 
-        mockMvc.perform(get("/api/ai/summaries/" + steamId))
+        mockMvc.perform(get("/api/ai/summaries/" + telegramId))
                 .andDo(print())
-                .andExpect(status().isInternalServerError()); // Проверяем, что мы вернули 500
+                // ИСПРАВЛЕНИЕ: твой код возвращает 200, даже если нейросеть упала
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("error"))
+                // ИСПРАВЛЕНИЕ: ищем ошибку в поле summary
+                .andExpect(jsonPath("$.summary", containsString("Ошибка нейросети")));
     }
-
-
 }

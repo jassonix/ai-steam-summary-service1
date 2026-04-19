@@ -4,9 +4,10 @@ services:
     build: .
     container_name: ai-service-container
     ports:
-      - "8081:8081"
+      - "8083:8083"
     environment:
       - AI_API_KEY=${AI_API_KEY}
     restart: always
 
 #docker-compose up -d --build
+#docker logs ai-service-container
