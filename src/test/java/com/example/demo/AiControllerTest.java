@@ -21,7 +21,7 @@ import static org.hamcrest.Matchers.containsString;
 
 @SpringBootTest(properties = {
         "steam.service.url=http://localhost:8080/api/ai",
-        "ai.api.key=test-token-123"
+        "ai.api.key=test-token-123",
 })
 @AutoConfigureMockMvc
 @AutoConfigureMockRestServiceServer
