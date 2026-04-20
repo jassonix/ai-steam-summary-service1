@@ -35,14 +35,14 @@ public class AiController {
         log.info("[START] Request for summary via DTO. TelegramId: {}", telegramId);
 
         try {
-            String urlWithParam = UriComponentsBuilder
-                    .fromHttpUrl(steamServiceUrl)
-                    .queryParam("telegramId", telegramId)
-                    .toUriString();
 
-            // 1. Получаем данные сразу в DTO
+            String finalUrl = steamServiceUrl + "/" + telegramId;
+
+            log.info("[STEP 0] Calling Steam Service via Path Variable: {}", finalUrl);
+
+            // Получаем данные сразу в DTO
             ResponseEntity<SteamProfileDto> steamDataResponse =
-                    restTemplate.getForEntity(urlWithParam, SteamProfileDto.class);
+                    restTemplate.getForEntity(finalUrl, SteamProfileDto.class);
 
             if (steamDataResponse.getStatusCode() != HttpStatus.OK || steamDataResponse.getBody() == null) {
                 return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
@@ -86,7 +86,10 @@ public class AiController {
 
             // Теперь промпт чистый и понятный для ИИ
             String prompt = String.format(
-                    "Сделай краткую сводку Steam аккаунта на русском языке. Далее пиши, имитируя разговорную речь, от первого лица и не стесняясь использовать слова, которые могут кому-то показаться обидными. Скажи, блатной это игрок или лох, и аргументируй.",
+                    "Сделай краткую сводку Steam аккаунта на русском языке. " +
+                            "Данные: ник '%s', всего игр %d, общее время %d ч., уровень %d, друзей %d. " +
+                            "Далее пиши, имитируя разговорную речь, от первого лица и не стесняясь использовать " +
+                            "слова, которые могут кому-то показаться обидными. Скажи, блатной это игрок или лох, и аргументируй. Не пиши дальнейший ответ в формате ИИ, не добавляй конструкции вроде 'вот, пишу неформально, как ты и просил'",
                     profile.nickname(), profile.gamesCount(), profile.hoursTotal(),
                     profile.steamLevel(), profile.friendCount()
             );
