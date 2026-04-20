@@ -36,7 +36,7 @@ public class AiController {
 
         try {
 
-            String finalUrl = steamServiceUrl + "/" + telegramId;
+            String finalUrl = steamServiceUrl + "/stats/" + telegramId;
 
             log.info("[STEP 0] Calling Steam Service via Path Variable: {}", finalUrl);
 
@@ -84,7 +84,7 @@ public class AiController {
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(apiKey);
 
-            // Теперь промпт чистый и понятный для ИИ
+
             String prompt = String.format(
                     "Сделай краткую сводку Steam аккаунта на русском языке. " +
                             "Данные: ник '%s', всего игр %d, общее время %d ч., уровень %d, друзей %d. " +

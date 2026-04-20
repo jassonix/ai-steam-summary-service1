@@ -20,7 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.hamcrest.Matchers.containsString;
 
 @SpringBootTest(properties = {
-        "steam.service.url=http://localhost:8080/api/ai/stats",
+        "steam.service.url=http://localhost:8080/api/ai",
         "ai.api.key=test-token-123"
 })
 @AutoConfigureMockMvc
@@ -34,10 +34,11 @@ class AiControllerTest {
     private MockRestServiceServer mockServer;
 
     @Test
+
     @DisplayName("Сценарий: Успешное получение сводки через GET к Steam и POST к OpenRouter")
+
     void testFullSummarizeFlow() throws Exception {
         String telegramId = "123456789";
-        // ИСПРАВЛЕНО: Теперь путь строится через / (Path Variable)
         String expectedSteamUrl = "http://localhost:8080/api/ai/stats/" + telegramId;
 
         String mockSteamResponse = """
