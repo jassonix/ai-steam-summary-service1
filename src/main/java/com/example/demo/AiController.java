@@ -82,7 +82,7 @@ public class AiController {
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(apiKey);
 
-            String prompt = "Сделай краткую сводку этого steam аккаунта на русском языке: " + inputJson.toString();
+            String prompt = "Сделай краткую сводку этого steam аккаунта на русском языке, чтобы было понятно, блатной он или лох: " + inputJson.toString();
 
             Map<String, Object> requestBody = Map.of(
                     "model", "nvidia/nemotron-3-super-120b-a12b:free",

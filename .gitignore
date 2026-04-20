@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+git add target/your-app.jar -f
+git commit -m "Add compiled jar"
+git push
