@@ -80,7 +80,7 @@ class AiControllerTest {
     @DisplayName("Ошибка: Привязка не найдена (Steam вернул 404)")
     void testSteamProfileNotFound() throws Exception {
         String telegramId = "999";
-        // ИСПРАВЛЕНО: Теперь путь строится через /
+
         String expectedSteamUrl = "http://localhost:8080/api/ai/stats/" + telegramId;
 
         mockServer.expect(requestTo(expectedSteamUrl))
@@ -98,7 +98,7 @@ class AiControllerTest {
     @DisplayName("Ошибка: Сбой нейросети (OpenRouter вернул 500)")
     void testAiServiceError() throws Exception {
         String telegramId = "123";
-        // ИСПРАВЛЕНО: Теперь путь строится через /
+
         String expectedSteamUrl = "http://localhost:8080/api/ai/stats/" + telegramId;
         String mockSteamResponse = "{\"nickname\": \"Gamer123\"}";
 
