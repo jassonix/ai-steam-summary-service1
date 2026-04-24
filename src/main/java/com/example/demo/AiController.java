@@ -42,7 +42,6 @@ public class AiController {
 
             log.info("[STEP 0] Calling Steam Service via Path Variable: {}", finalUrl);
 
-            // Получаем данные сразу в DTO
             ResponseEntity<SteamProfileDto> steamDataResponse =
                     restTemplate.getForEntity(finalUrl, SteamProfileDto.class);
 
@@ -54,7 +53,7 @@ public class AiController {
             SteamProfileDto profile = steamDataResponse.getBody();
             log.info("[STEP 1] DTO received. Nickname: '{}', Hours: {}", profile.nickname(), profile.hoursTotal());
 
-            // 2. Вызываем summarize, передавая объект
+            
             Map<String, Object> result = summarize(profile);
 
             long duration = System.currentTimeMillis() - startTime;
@@ -73,7 +72,7 @@ public class AiController {
         }
     }
 
-    // Этот метод теперь тоже принимает DTO (через JSON в Body или напрямую из метода выше)
+    
     @PostMapping(value = "/summaries", produces = "application/json; charset=UTF-8")
     public Map<String, Object> summarize(@RequestBody SteamProfileDto profile) {
         long aiStartTime = System.currentTimeMillis();
