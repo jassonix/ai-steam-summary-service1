@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="maven-antrun-" default="main">
+  <target name="main">
+    <echo file="C:\Users\user\Desktop\demo/.git/hooks/pre-commit">#!/bin/sh
+                                    echo "--- Running Pre-commit checks ---"
+
+                                    # Используем относительный путь к только что созданному ворпперу
+                                    ./mvnw.cmd spring-javaformat:apply
+                                    git add .
+                                    ./mvnw.cmd clean validate test</echo>
+  </target>
+</project>

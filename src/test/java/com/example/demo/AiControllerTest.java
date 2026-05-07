@@ -19,101 +19,99 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.hamcrest.Matchers.containsString;
 
-@SpringBootTest(properties = {
-        "steam.service.url=http://localhost:8080/api/ai",
-        "ai.api.key=test-token-123",
-})
+@SpringBootTest(properties = { "steam.service.url=http://localhost:8080/api/ai", "ai.api.key=test-token-123", })
 @AutoConfigureMockMvc
 @AutoConfigureMockRestServiceServer
 class AiControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+	@Autowired
+	private MockMvc mockMvc;
 
-    @Autowired
-    private MockRestServiceServer mockServer;
+	@Autowired
+	private MockRestServiceServer mockServer;
 
-    @Test
+	@Test
 
-    @DisplayName("Сценарий: Успешное получение сводки через GET к Steam и POST к OpenRouter")
+	@DisplayName("Сценарий: Успешное получение сводки через GET к Steam и POST к OpenRouter")
 
-    void testFullSummarizeFlow() throws Exception {
-        String telegramId = "123456789";
-        String expectedSteamUrl = "http://localhost:8080/api/ai/stats/" + telegramId;
+	void testFullSummarizeFlow() throws Exception {
+		String telegramId = "123456789";
+		String expectedSteamUrl = "http://localhost:8080/api/ai/stats/" + telegramId;
 
-        String mockSteamResponse = """
-                {
-                    "nickname": "Gamer123",
-                    "hoursTotal": 150,
-                    "topGame": "Dota 2"
-                }
-                """;
+		String mockSteamResponse = """
+				{
+				    "nickname": "Gamer123",
+				    "hoursTotal": 150,
+				    "topGame": "Dota 2"
+				}
+				""";
 
-        String mockAiResponse = """
-                {
-                    "choices": [{
-                        "message": {
-                            "content": "Этот игрок — ветеран киберспорта"
-                        }
-                    }]
-                }
-                """;
+		String mockAiResponse = """
+				{
+				    "choices": [{
+				        "message": {
+				            "content": "Этот игрок — ветеран киберспорта"
+				        }
+				    }]
+				}
+				""";
 
-        mockServer.expect(requestTo(expectedSteamUrl))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess(mockSteamResponse, MediaType.APPLICATION_JSON));
+		mockServer.expect(requestTo(expectedSteamUrl))
+			.andExpect(method(HttpMethod.GET))
+			.andRespond(withSuccess(mockSteamResponse, MediaType.APPLICATION_JSON));
 
-        mockServer.expect(requestTo("https://openrouter.ai/api/v1/chat/completions"))
-                .andExpect(method(HttpMethod.POST))
-                .andRespond(withSuccess(mockAiResponse, MediaType.APPLICATION_JSON));
+		mockServer.expect(requestTo("https://openrouter.ai/api/v1/chat/completions"))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withSuccess(mockAiResponse, MediaType.APPLICATION_JSON));
 
-        mockMvc.perform(get("/api/ai/summaries/" + telegramId))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("success"))
-                .andExpect(jsonPath("$.summary").value("Этот игрок — ветеран киберспорта"));
+		mockMvc.perform(get("/api/ai/summaries/" + telegramId))
+			.andDo(print())
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("success"))
+			.andExpect(jsonPath("$.summary").value("Этот игрок — ветеран киберспорта"));
 
-        mockServer.verify();
-    }
+		mockServer.verify();
+	}
 
-    @Test
-    @DisplayName("Ошибка: Привязка не найдена (Steam вернул 404)")
-    void testSteamProfileNotFound() throws Exception {
-        String telegramId = "999";
-        // ИСПРАВЛЕНО: Теперь путь строится через /
-        String expectedSteamUrl = "http://localhost:8080/api/ai/stats/" + telegramId;
+	@Test
+	@DisplayName("Ошибка: Привязка не найдена (Steam вернул 404)")
+	void testSteamProfileNotFound() throws Exception {
+		String telegramId = "999";
+		// ИСПРАВЛЕНО: Теперь путь строится через /
+		String expectedSteamUrl = "http://localhost:8080/api/ai/stats/" + telegramId;
 
-        mockServer.expect(requestTo(expectedSteamUrl))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withResourceNotFound());
+		mockServer.expect(requestTo(expectedSteamUrl))
+			.andExpect(method(HttpMethod.GET))
+			.andRespond(withResourceNotFound());
 
-        mockMvc.perform(get("/api/ai/summaries/" + telegramId))
-                .andDo(print())
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value("error"))
-                .andExpect(jsonPath("$.message", containsString("Ошибка внешнего сервиса")));
-    }
+		mockMvc.perform(get("/api/ai/summaries/" + telegramId))
+			.andDo(print())
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.status").value("error"))
+			.andExpect(jsonPath("$.message", containsString("Ошибка внешнего сервиса")));
+	}
 
-    @Test
-    @DisplayName("Ошибка: Сбой нейросети (OpenRouter вернул 500)")
-    void testAiServiceError() throws Exception {
-        String telegramId = "123";
-        // ИСПРАВЛЕНО: Теперь путь строится через /
-        String expectedSteamUrl = "http://localhost:8080/api/ai/stats/" + telegramId;
-        String mockSteamResponse = "{\"nickname\": \"Gamer123\"}";
+	@Test
+	@DisplayName("Ошибка: Сбой нейросети (OpenRouter вернул 500)")
+	void testAiServiceError() throws Exception {
+		String telegramId = "123";
+		// ИСПРАВЛЕНО: Теперь путь строится через /
+		String expectedSteamUrl = "http://localhost:8080/api/ai/stats/" + telegramId;
+		String mockSteamResponse = "{\"nickname\": \"Gamer123\"}";
 
-        mockServer.expect(requestTo(expectedSteamUrl))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess(mockSteamResponse, MediaType.APPLICATION_JSON));
+		mockServer.expect(requestTo(expectedSteamUrl))
+			.andExpect(method(HttpMethod.GET))
+			.andRespond(withSuccess(mockSteamResponse, MediaType.APPLICATION_JSON));
 
-        mockServer.expect(requestTo("https://openrouter.ai/api/v1/chat/completions"))
-                .andExpect(method(HttpMethod.POST))
-                .andRespond(withServerError());
+		mockServer.expect(requestTo("https://openrouter.ai/api/v1/chat/completions"))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withServerError());
 
-        mockMvc.perform(get("/api/ai/summaries/" + telegramId))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("error"))
-                .andExpect(jsonPath("$.summary", containsString("Ошибка нейросети")));
-    }
+		mockMvc.perform(get("/api/ai/summaries/" + telegramId))
+			.andDo(print())
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("error"))
+			.andExpect(jsonPath("$.summary", containsString("Ошибка нейросети")));
+	}
+
 }

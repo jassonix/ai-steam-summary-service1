@@ -15,106 +15,104 @@ import java.util.*;
 @RequestMapping("/api/ai")
 public class AiController {
 
-    private static final Logger log = LoggerFactory.getLogger(AiController.class);
+	private static final Logger log = LoggerFactory.getLogger(AiController.class);
 
-    @Value("${steam.service.url}")
-    private String steamServiceUrl;
+	@Value("${steam.service.url}")
+	private String steamServiceUrl;
 
-    private final RestTemplate restTemplate;
+	private final RestTemplate restTemplate;
 
-    @Value("${ai.api.key}")
-    private String apiKey;
+	@Value("${ai.api.key}")
+	private String apiKey;
 
+	public AiController(RestTemplate restTemplate) {
+		this.restTemplate = restTemplate;
+	}
 
+	@GetMapping("/summaries/{telegramId}")
+	public ResponseEntity<Map<String, Object>> summarizeByTelegramId(@PathVariable("telegramId") String telegramId) {
+		long startTime = System.currentTimeMillis();
+		log.info("[START] Request for summary via DTO. TelegramId: {}", telegramId);
 
-    public AiController(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
-    }
+		try {
 
-    @GetMapping("/summaries/{telegramId}")
-    public ResponseEntity<Map<String, Object>> summarizeByTelegramId(@PathVariable("telegramId") String telegramId) {
-        long startTime = System.currentTimeMillis();
-        log.info("[START] Request for summary via DTO. TelegramId: {}", telegramId);
+			String finalUrl = steamServiceUrl + "/stats/" + telegramId;
 
-        try {
+			log.info("[STEP 0] Calling Steam Service via Path Variable: {}", finalUrl);
 
-            String finalUrl = steamServiceUrl + "/stats/" + telegramId;
+			// Получаем данные сразу в DTO
+			ResponseEntity<SteamProfileDto> steamDataResponse = restTemplate.getForEntity(finalUrl,
+					SteamProfileDto.class);
 
-            log.info("[STEP 0] Calling Steam Service via Path Variable: {}", finalUrl);
+			if (steamDataResponse.getStatusCode() != HttpStatus.OK || steamDataResponse.getBody() == null) {
+				return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+					.body(Map.of("status", "error", "message", "Нет данных от Стим-сервиса"));
+			}
 
-            // Получаем данные сразу в DTO
-            ResponseEntity<SteamProfileDto> steamDataResponse =
-                    restTemplate.getForEntity(finalUrl, SteamProfileDto.class);
+			SteamProfileDto profile = steamDataResponse.getBody();
+			log.info("[STEP 1] DTO received. Nickname: '{}', Hours: {}", profile.nickname(), profile.hoursTotal());
 
-            if (steamDataResponse.getStatusCode() != HttpStatus.OK || steamDataResponse.getBody() == null) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                        .body(Map.of("status", "error", "message", "Нет данных от Стим-сервиса"));
-            }
+			// 2. Вызываем summarize, передавая объект
+			Map<String, Object> result = summarize(profile);
 
-            SteamProfileDto profile = steamDataResponse.getBody();
-            log.info("[STEP 1] DTO received. Nickname: '{}', Hours: {}", profile.nickname(), profile.hoursTotal());
+			long duration = System.currentTimeMillis() - startTime;
+			log.info("[END] Request processed in {} ms", duration);
 
-            // 2. Вызываем summarize, передавая объект
-            Map<String, Object> result = summarize(profile);
+			return ResponseEntity.ok(result);
 
-            long duration = System.currentTimeMillis() - startTime;
-            log.info("[END] Request processed in {} ms", duration);
+		}
+		catch (HttpClientErrorException | HttpServerErrorException e) {
+			log.error("[API ERROR] Status: {}, Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+			return ResponseEntity.status(e.getStatusCode())
+				.body(Map.of("status", "error", "message", "Ошибка внешнего сервиса"));
+		}
+		catch (Exception e) {
+			log.error("[CRITICAL ERROR]", e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of("status", "error", "message", e.getMessage()));
+		}
+	}
 
-            return ResponseEntity.ok(result);
+	// Этот метод теперь тоже принимает DTO (через JSON в Body или напрямую из метода
+	// выше)
+	@PostMapping(value = "/summaries", produces = "application/json; charset=UTF-8")
+	public Map<String, Object> summarize(@RequestBody SteamProfileDto profile) {
+		long aiStartTime = System.currentTimeMillis();
+		log.info("[AI START] Beginning OpenRouter generation for {}", profile.nickname());
 
-        } catch (HttpClientErrorException | HttpServerErrorException e) {
-            log.error("[API ERROR] Status: {}, Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
-            return ResponseEntity.status(e.getStatusCode())
-                    .body(Map.of("status", "error", "message", "Ошибка внешнего сервиса"));
-        } catch (Exception e) {
-            log.error("[CRITICAL ERROR]", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("status", "error", "message", e.getMessage()));
-        }
-    }
+		try {
+			String url = "https://openrouter.ai/api/v1/chat/completions";
 
-    // Этот метод теперь тоже принимает DTO (через JSON в Body или напрямую из метода выше)
-    @PostMapping(value = "/summaries", produces = "application/json; charset=UTF-8")
-    public Map<String, Object> summarize(@RequestBody SteamProfileDto profile) {
-        long aiStartTime = System.currentTimeMillis();
-        log.info("[AI START] Beginning OpenRouter generation for {}", profile.nickname());
+			HttpHeaders headers = new HttpHeaders();
+			headers.setContentType(MediaType.APPLICATION_JSON);
+			headers.setBearerAuth(apiKey);
 
-        try {
-            String url = "https://openrouter.ai/api/v1/chat/completions";
+			String prompt = String.format("Сделай краткую сводку Steam аккаунта на русском языке. "
+					+ "Данные: ник '%s', всего игр %d, общее время %d ч., уровень %d, друзей %d. "
+					+ "Далее пиши, имитируя разговорную речь, от первого лица. Не используй ненормативную лексику, но с некоторым шансом можешь подшутить."
+					+ "Скажи, блатной это игрок или лох, и аргументируй. Не пиши дальнейший ответ в формате ИИ, не добавляй конструкции вроде 'вот, пишу неформально, как ты и просил'",
+					profile.nickname(), profile.gamesCount(), profile.hoursTotal(), profile.steamLevel(),
+					profile.friendCount());
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
+			Map<String, Object> requestBody = Map.of("model", "nvidia/nemotron-3-super-120b-a12b:free", "messages",
+					List.of(Map.of("role", "user", "content", prompt)));
 
+			HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+			ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
 
-            String prompt = String.format(
-                    "Сделай краткую сводку Steam аккаунта на русском языке. " +
-                            "Данные: ник '%s', всего игр %d, общее время %d ч., уровень %d, друзей %d. " +
-                            "Далее пиши, имитируя разговорную речь, от первого лица. Не используй ненормативную лексику, но с некоторым шансом можешь подшутить." +
-                            "Скажи, блатной это игрок или лох, и аргументируй. Не пиши дальнейший ответ в формате ИИ, не добавляй конструкции вроде 'вот, пишу неформально, как ты и просил'",
-                    profile.nickname(), profile.gamesCount(), profile.hoursTotal(),
-                    profile.steamLevel(), profile.friendCount()
-            );
+			List choices = (List) response.getBody().get("choices");
+			Map message = (Map) ((Map) choices.get(0)).get("message");
+			String aiContent = (String) message.get("content");
 
-            Map<String, Object> requestBody = Map.of(
-                    "model", "nvidia/nemotron-3-super-120b-a12b:free",
-                    "messages", List.of(Map.of("role", "user", "content", prompt))
-            );
+			log.info("[AI END] Time taken: {} ms", (System.currentTimeMillis() - aiStartTime));
 
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+			return Map.of("status", "success", "summary", aiContent);
 
-            List choices = (List) response.getBody().get("choices");
-            Map message = (Map) ((Map) choices.get(0)).get("message");
-            String aiContent = (String) message.get("content");
+		}
+		catch (Exception e) {
+			log.error("[AI ERROR]", e);
+			return Map.of("status", "error", "summary", "Ошибка нейросети: " + e.getMessage());
+		}
+	}
 
-            log.info("[AI END] Time taken: {} ms", (System.currentTimeMillis() - aiStartTime));
-
-            return Map.of("status", "success", "summary", aiContent);
-
-        } catch (Exception e) {
-            log.error("[AI ERROR]", e);
-            return Map.of("status", "error", "summary", "Ошибка нейросети: " + e.getMessage());
-        }
-    }
 }
